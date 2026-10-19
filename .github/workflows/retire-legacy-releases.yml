@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm_retirement:
-        description: Hide the five listed legacy releases as recoverable drafts
+        description: Hide superseded v1.6.5 as a recoverable draft
         required: true
         type: boolean
         default: false
@@ -33,7 +33,7 @@ jobs:
           repo = "ActuallySeamless/actuallyseamless-releases"
           base = "https://api.github.com/repos/" + repo
           token = os.environ["GITHUB_TOKEN"]
-          legacy = {"v1.5.7", "v1.6.0", "v1.6.1", "v1.6.2", "v1.6.3"}
+          legacy = {"v1.6.5"}
 
           def api(route, method="GET", body=None):
               request = urllib.request.Request(
@@ -48,10 +48,10 @@ jobs:
                   return json.load(response)
 
           latest = api("/releases/latest")
-          assert latest["tag_name"] == "v1.6.5", "Replacement is not the current latest release"
+          assert latest["tag_name"] == "v1.6.6", "Replacement is not the current latest release"
           assert not latest["draft"] and not latest["prerelease"]
-          required = {"ActuallySeamless-Setup-1.6.5.exe",
-                      "ActuallySeamless-Setup-1.6.5.exe.blockmap", "latest.yml"}
+          required = {"ActuallySeamless-Setup-1.6.6.exe",
+                      "ActuallySeamless-Setup-1.6.6.exe.blockmap", "latest.yml"}
           assert required <= {a["name"] for a in latest["assets"]}, "Replacement assets missing"
           releases = api("/releases?per_page=100")
           matches = {r["tag_name"]: r for r in releases if r["tag_name"] in legacy}
@@ -67,5 +67,5 @@ jobs:
               assert asset_ids == {a["id"] for a in result["assets"]}, "Asset preservation check failed"
               print(tag + ": draft; installer assets retained")
 
-          assert api("/releases/latest")["tag_name"] == "v1.6.5"
-          print("Latest v1.6.5 remains public. No release or installer was deleted.")
+          assert api("/releases/latest")["tag_name"] == "v1.6.6"
+          print("Latest v1.6.6 remains public. No release or installer was deleted.")
