@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm_retirement:
-        description: Hide superseded v1.6.5 as a recoverable draft
+        description: Hide all releases older than v1.7.2 as recoverable drafts
         required: true
         type: boolean
         default: false
@@ -33,7 +33,6 @@ jobs:
           repo = "ActuallySeamless/actuallyseamless-releases"
           base = "https://api.github.com/repos/" + repo
           token = os.environ["GITHUB_TOKEN"]
-          legacy = {"v1.6.5"}
 
           def api(route, method="GET", body=None):
               request = urllib.request.Request(
@@ -48,14 +47,23 @@ jobs:
                   return json.load(response)
 
           latest = api("/releases/latest")
-          assert latest["tag_name"] == "v1.6.6", "Replacement is not the current latest release"
+          assert latest["tag_name"] == "v1.7.2", "Replacement is not the current latest release"
           assert not latest["draft"] and not latest["prerelease"]
-          required = {"ActuallySeamless-Setup-1.6.6.exe",
-                      "ActuallySeamless-Setup-1.6.6.exe.blockmap", "latest.yml"}
+          required = {"ActuallySeamless-Setup-1.7.2.exe",
+                      "ActuallySeamless-Setup-1.7.2.exe.blockmap", "latest.yml"}
           assert required <= {a["name"] for a in latest["assets"]}, "Replacement assets missing"
-          releases = api("/releases?per_page=100")
-          matches = {r["tag_name"]: r for r in releases if r["tag_name"] in legacy}
-          assert set(matches) == legacy, "A legacy release is missing; no changes started"
+          releases = []
+          for page in range(1, 11):
+              batch = api("/releases?per_page=100&page=" + str(page))
+              releases.extend(batch)
+              if len(batch) < 100:
+                  break
+          else:
+              raise AssertionError("Too many pages; no changes started")
+          matches = {r["tag_name"]: r for r in releases if not r["draft"] and r["id"] != latest["id"]}
+          legacy = set(matches)
+          for tag in legacy:
+              assert tag.startswith("v") and tuple(map(int, tag[1:].split("."))) < (1, 7, 2), "Unexpected version; no changes started"
           assert all(not r.get("immutable", False) for r in matches.values()), "Immutable release found"
 
           for tag in sorted(legacy):
@@ -67,5 +75,7 @@ jobs:
               assert asset_ids == {a["id"] for a in result["assets"]}, "Asset preservation check failed"
               print(tag + ": draft; installer assets retained")
 
-          assert api("/releases/latest")["tag_name"] == "v1.6.6"
-          print("Latest v1.6.6 remains public. No release or installer was deleted.")
+          assert api("/releases/latest")["tag_name"] == "v1.7.2"
+          remaining = api("/releases?per_page=100")
+          assert {r["id"] for r in remaining if not r["draft"]} == {latest["id"]}
+          print("Only v1.7.2 remains public. Older installers are retained as private drafts.")
