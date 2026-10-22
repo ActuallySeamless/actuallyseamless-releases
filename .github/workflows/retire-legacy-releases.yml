@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm_retirement:
-        description: Hide all releases older than v1.8.1 as recoverable drafts
+        description: Hide all releases older than v1.8.3 as recoverable drafts
         required: true
         type: boolean
         default: false
@@ -47,10 +47,10 @@ jobs:
                   return json.load(response)
 
           latest = api("/releases/latest")
-          assert latest["tag_name"] == "v1.8.1", "Replacement is not the current latest release"
+          assert latest["tag_name"] == "v1.8.3", "Replacement is not the current latest release"
           assert not latest["draft"] and not latest["prerelease"]
-          required = {"ActuallySeamless-Setup-1.8.1.exe",
-                      "ActuallySeamless-Setup-1.8.1.exe.blockmap", "latest.yml", "update-signature.json", "ActuallySeamless-Portable-1.8.1.exe"}
+          required = {"ActuallySeamless-Setup-1.8.3.exe",
+                      "ActuallySeamless-Setup-1.8.3.exe.blockmap", "latest.yml", "update-signature.json", "ActuallySeamless-Portable-1.8.3.exe"}
           assert required <= {a["name"] for a in latest["assets"]}, "Replacement assets missing"
           releases = []
           for page in range(1, 11):
@@ -63,7 +63,7 @@ jobs:
           matches = {r["tag_name"]: r for r in releases if not r["draft"] and r["id"] != latest["id"]}
           legacy = set(matches)
           for tag in legacy:
-              assert tag.startswith("v") and tuple(map(int, tag[1:].split("."))) < (1, 8, 1), "Unexpected version; no changes started"
+              assert tag.startswith("v") and tuple(map(int, tag[1:].split("."))) < (1, 8, 3), "Unexpected version; no changes started"
           assert all(not r.get("immutable", False) for r in matches.values()), "Immutable release found"
 
           for tag in sorted(legacy):
@@ -75,7 +75,7 @@ jobs:
               assert asset_ids == {a["id"] for a in result["assets"]}, "Asset preservation check failed"
               print(tag + ": draft; installer assets retained")
 
-          assert api("/releases/latest")["tag_name"] == "v1.8.1"
+          assert api("/releases/latest")["tag_name"] == "v1.8.3"
           remaining = api("/releases?per_page=100")
           assert {r["id"] for r in remaining if not r["draft"]} == {latest["id"]}
-          print("Only v1.8.1 remains public. Older installers are retained as private drafts.")
+          print("Only v1.8.3 remains public. Older installers are retained as private drafts.")
