@@ -1,21 +1,17 @@
 name: Retire legacy installer downloads
-
 on:
   workflow_dispatch:
     inputs:
       confirm_retirement:
-        description: Hide all releases older than v1.10.3 as recoverable drafts
+        description: Hide all releases older than v1.10.4 as recoverable drafts
         required: true
         type: boolean
         default: false
-
 permissions:
   contents: write
-
 concurrency:
   group: retire-legacy-installer-downloads
   cancel-in-progress: false
-
 jobs:
   retire:
     if: inputs.confirm_retirement == true
@@ -28,29 +24,22 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           import json, os, urllib.request
-
-          # No checkout, third-party actions, external services or persistent token.
           repo = "ActuallySeamless/actuallyseamless-releases"
           base = "https://api.github.com/repos/" + repo
           token = os.environ["GITHUB_TOKEN"]
-
           def api(route, method="GET", body=None):
-              request = urllib.request.Request(
-                  base + route,
-                  data=None if body is None else json.dumps(body).encode(),
-                  method=method,
-                  headers={"Authorization": "Bearer " + token,
-                           "Accept": "application/vnd.github+json",
-                           "Content-Type": "application/json",
-                           "X-GitHub-Api-Version": "2022-11-28"})
+              request = urllib.request.Request(base + route,
+                  data=None if body is None else json.dumps(body).encode(), method=method,
+                  headers={"Authorization": "Bearer " + token, "Accept": "application/vnd.github+json",
+                           "Content-Type": "application/json", "X-GitHub-Api-Version": "2022-11-28"})
               with urllib.request.urlopen(request, timeout=30) as response:
                   return json.load(response)
-
           latest = api("/releases/latest")
-          assert latest["tag_name"] == "v1.10.3", "Replacement is not the current latest release"
+          assert latest["tag_name"] == "v1.10.4", "Replacement is not current latest"
           assert not latest["draft"] and not latest["prerelease"]
-          required = {"ActuallySeamless-Setup-1.10.3.exe",
-                      "native-update-signature.json", "ActuallySeamless-Native-Setup-1.10.3.exe", "latest.yml", "update-signature.json", "ActuallySeamless-Portable-1.10.3.exe"}
+          required = {"ActuallySeamless-Setup-1.10.4.exe", "native-update-signature.json",
+                      "ActuallySeamless-Native-Setup-1.10.4.exe", "latest.yml", "update-signature.json",
+                      "ActuallySeamless-Portable-1.10.4.exe"}
           assert required <= {a["name"] for a in latest["assets"]}, "Replacement assets missing"
           releases = []
           for page in range(1, 11):
@@ -61,21 +50,15 @@ jobs:
           else:
               raise AssertionError("Too many pages; no changes started")
           matches = {r["tag_name"]: r for r in releases if not r["draft"] and r["id"] != latest["id"]}
-          legacy = set(matches)
-          for tag in legacy:
-              assert tag.startswith("v") and tuple(map(int, tag[1:].split("."))) < (1, 10, 3), "Unexpected version; no changes started"
+          for tag in matches:
+              assert tag.startswith("v") and tuple(map(int, tag[1:].split("."))) < (1, 10, 4), "Unexpected version; no changes started"
           assert all(not r.get("immutable", False) for r in matches.values()), "Immutable release found"
-
-          for tag in sorted(legacy):
-              release = matches[tag]
+          for tag, release in sorted(matches.items()):
               asset_ids = {a["id"] for a in release["assets"]}
-              result = release if release["draft"] else api(
-                  "/releases/" + str(release["id"]), "PATCH", {"draft": True})
+              result = api("/releases/" + str(release["id"]), "PATCH", {"draft": True})
               assert result["draft"] and result["tag_name"] == tag
               assert asset_ids == {a["id"] for a in result["assets"]}, "Asset preservation check failed"
               print(tag + ": draft; installer assets retained")
-
-          assert api("/releases/latest")["tag_name"] == "v1.10.3"
-          remaining = api("/releases?per_page=100")
-          assert {r["id"] for r in remaining if not r["draft"]} == {latest["id"]}
-          print("Only v1.10.3 remains public. Older installers are retained as private drafts.")
+          assert api("/releases/latest")["tag_name"] == "v1.10.4"
+          assert {r["id"] for r in api("/releases?per_page=100") if not r["draft"]} == {latest["id"]}
+          print("Only v1.10.4 remains public. Older installers retained as recoverable drafts.")
